@@ -1,0 +1,105 @@
+plugins:
+  - rubocop-rspec
+
+AllCops:
+  TargetRubyVersion: 3.1
+  NewCops: enable
+  Exclude:
+    - "lib/generators/**/templates/**/*"
+    - "vendor/**/*"
+    - "tmp/**/*"
+
+Style/Documentation:
+  Enabled: false
+
+Style/StringLiterals:
+  EnforcedStyle: double_quotes
+
+Style/StringLiteralsInInterpolation:
+  EnforcedStyle: double_quotes
+
+Style/TrailingCommaInHashLiteral:
+  EnforcedStyleForMultiline: no_comma
+
+# The API's noul criteria keys really are "true" and "false"; mirroring the wire
+# format is clearer here than inventing different names for them.
+Lint/BooleanSymbol:
+  Enabled: false
+
+# `when String then object` and `when Numeric then object` say different things
+# even though they do the same thing.
+Lint/DuplicateBranch:
+  Enabled: false
+
+Layout/LineLength:
+  Max: 110
+
+# A library that explains itself in its error messages runs long on the size cops.
+# The alternative is shorter messages, which is the worse trade.
+Metrics/AbcSize:
+  Max: 22
+  Exclude:
+    - "lib/jevalyn/client.rb"
+    - "lib/jevalyn/question.rb"
+    - "lib/jevalyn/result.rb"
+    - "lib/jevalyn/router.rb"
+    - "lib/jevalyn/testing.rb"
+
+Metrics/MethodLength:
+  Max: 20
+  Exclude:
+    - "lib/jevalyn/result.rb"
+    - "lib/jevalyn/testing.rb"
+
+Metrics/CyclomaticComplexity:
+  Max: 9
+
+Metrics/PerceivedComplexity:
+  Max: 10
+
+Metrics/ClassLength:
+  Max: 180
+
+Metrics/ModuleLength:
+  Max: 180
+
+Metrics/ParameterLists:
+  Max: 7
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+    - "*.gemspec"
+    - "lib/jevalyn/guardrail.rb"
+    - "lib/jevalyn/result.rb"
+    - "lib/jevalyn/tasks/jevalyn.rake"
+
+RSpec/ExampleLength:
+  Max: 15
+
+RSpec/MultipleExpectations:
+  Max: 5
+
+RSpec/NestedGroups:
+  Max: 4
+
+RSpec/InstanceVariable:
+  Enabled: false
+
+RSpec/MessageSpies:
+  Enabled: false
+
+RSpec/MultipleDescribes:
+  Enabled: false
+
+RSpec/SpecFilePathFormat:
+  Enabled: false
+
+RSpec/SubjectStub:
+  Enabled: false
+
+# The generator specs load generated files, which really do define real constants.
+# stub_const cannot stand in for that -- the point is that `load` works.
+RSpec/RemoveConst:
+  Exclude:
+    - "spec/generators_spec.rb"

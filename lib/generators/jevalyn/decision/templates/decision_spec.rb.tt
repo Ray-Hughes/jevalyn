@@ -1,0 +1,35 @@
+# frozen_string_literal: true
+
+require "rails_helper"
+
+RSpec.describe <%= class_name %> do
+  it "declares the questions it sends" do
+    expect(described_class.question_names).to contain_exactly(<%= parsed_questions.map { |n, _| ":#{n}" }.join(", ") %>)
+  end
+
+<% first_name, first_type = parsed_questions.first -%>
+  it "answers <%= first_name %>" do
+    stub_jevalyn(described_class, <%= parsed_questions.map { |n, t| "#{n}: #{{ noul: "true", choice: ":first_option", score: "1" }[t]}" }.join(", ") %>)
+
+    result = described_class.evaluate("TODO: a realistic piece of state")
+
+<% case first_type
+   when :noul -%>
+    expect(result.<%= first_name %>?).to be(true)
+<% when :choice -%>
+    expect(result.<%= first_name %>).to eq(:first_option)
+<% when :score -%>
+    expect(result.<%= first_name %>_level).to eq(1)
+<% end -%>
+    expect(described_class).to have_been_evaluated.once
+  end
+
+  # Jev's answers move with the model and with your rubric wording. This is the test
+  # worth keeping honest: a handful of real inputs whose answer you are sure of, run
+  # against the live API. Tag it :jevalyn_live and run it deliberately, not in CI.
+  #
+  # it "routes real examples correctly", :jevalyn_live do
+  #   result = described_class.evaluate(File.read("spec/fixtures/<%= file_name %>.txt"))
+  #   expect(result.<%= first_name %>).to eq(...)
+  # end
+end

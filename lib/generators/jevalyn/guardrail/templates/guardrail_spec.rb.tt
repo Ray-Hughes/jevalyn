@@ -1,0 +1,26 @@
+# frozen_string_literal: true
+
+require "rails_helper"
+
+RSpec.describe <%= class_name %> do
+  it "allows when Jev is confident it is safe" do
+    stub_jevalyn(described_class, <%= question_name %>: 0.99)
+
+    expect(described_class.check("TODO: something safe")).to be_allow
+  end
+
+  it "denies when the probability is below the gate" do
+    stub_jevalyn(described_class, <%= question_name %>: <%= [allow_above.to_f - 0.1, 0.0].max.round(2) %>)
+
+    expect(described_class.check("TODO: something borderline")).to be_deny
+  end
+
+  it "denies rather than failing open when the API is unreachable" do
+    allow(Jevalyn.client).to receive(:evaluate).and_raise(Jevalyn::TimeoutError, "boom")
+
+    result = described_class.check("anything")
+
+    expect(result).to be_deny
+    expect(result).to be_failed
+  end
+end

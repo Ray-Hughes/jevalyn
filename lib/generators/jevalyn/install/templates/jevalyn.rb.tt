@@ -1,0 +1,29 @@
+# frozen_string_literal: true
+
+Jevalyn.configure do |c|
+  # Your TypeSafe API key. Keep it out of the repo.
+  c.api_key = ENV["<%= options[:api_key_env] %>"]
+
+  # "jev-latest" tracks the newest stable release. An alias moves without telling
+  # you, so once you have tuned thresholds against a version, pin it here instead
+  # (e.g. "jev-1.13.0"). Every Result reports the version that actually answered.
+  c.default_model = "jev-latest"
+
+  # Jev answers in well under a second. A long timeout only means a slow request
+  # holds a Rails thread open for longer than it is worth.
+  c.timeout = 10
+  c.open_timeout = 5
+
+  # 429 (rate limited) and 529 (overloaded) are retried with exponential backoff,
+  # honouring the API's retry-after header when it sends one.
+  c.max_retries = 2
+
+  # No network in tests. Answers come from Jevalyn::Testing stubs instead; an
+  # unstubbed evaluation raises rather than silently passing.
+  c.mock_mode = Rails.env.test?
+
+  # Certainty floor a Decision uses when it does not declare its own. Leave nil to
+  # require each Decision to make its own call, which is usually the right default:
+  # the threshold for routing a support ticket is not the threshold for a refund.
+  # c.default_confidence_threshold = 0.75
+end

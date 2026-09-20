@@ -1,0 +1,48 @@
+# frozen_string_literal: true
+
+# <%= class_name %> asks Jev a fixed set of questions about a piece of state and
+# gets typed answers back. It does not generate text -- every answer is a
+# probability, one of your options, or a level on your rubric.
+class <%= class_name %> < Jevalyn::Decision
+<% parsed_questions.each do |name, type| -%>
+<% case type
+   when :noul -%>
+  # A noul returns the probability that the answer is yes, 0.0 to 1.0. You pick the
+  # cutoff -- `result.<%= name %>?` uses 0.5, `result.<%= name %>?(0.9)` is stricter.
+  question :<%= name %>, type: :noul,
+    instructions: "TODO: a yes/no question about the state",
+    criteria: {
+      true: "TODO: what a yes looks like",
+      false: "TODO: what a no looks like"
+    }
+
+<% when :choice -%>
+  # A choice picks one option and returns the full probability distribution plus a
+  # confidence. Give it every real option, not a shortlist -- Jev takes up to 255 and
+  # each one costs only a few tokens.
+  question :<%= name %>, type: :choice,
+    instructions: "TODO: what should the model decide?",
+    criteria: {
+      first_option: "TODO: when this option applies",
+      second_option: "TODO: when this one does instead"
+    }
+
+<% when :score -%>
+  # A score rates the state against ordered levels, lowest first, and returns a
+  # weighted number that can land between them: 1.6 means past the second level and
+  # not quite the third. Use `result.<%= name %>_label` for the nearest level's name.
+  question :<%= name %>, type: :score,
+    instructions: "TODO: what should the model rate?",
+    criteria: [
+      "TODO: lowest level",
+      "TODO: middle level",
+      "TODO: highest level"
+    ]
+
+<% end -%>
+<% end -%>
+  # Answers below this are reported by `result.uncertain?` and named by
+  # `result.uncertain_questions`. Set it by what a wrong answer costs: a misrouted
+  # ticket is cheap, an auto-approved refund is not.
+  confidence_threshold <%= threshold %>
+end

@@ -1,0 +1,23 @@
+# frozen_string_literal: true
+
+# <%= class_name %> is a one-question gate: it asks Jev whether something should be
+# allowed through, and answers #allow? / #deny?.
+#
+#   <%= class_name %>.check(payload).allow?
+class <%= class_name %> < Jevalyn::Guardrail
+  question :<%= question_name %>, type: :noul,
+    instructions: "TODO: is this safe to allow without human review?",
+    criteria: {
+      true: "TODO: what clearly safe looks like",
+      false: "TODO: what needs a human"
+    }
+
+  # Jev returns no confidence for a noul -- the probability is the answer -- so this
+  # is the probability #allow? requires. The default is 0.5, a coin flip; set it by
+  # what letting a bad one through actually costs.
+  allow_above <%= allow_above %>
+
+  # If the API call itself fails, deny rather than allow. Set :raise to handle the
+  # outage yourself instead.
+  on_error :deny
+end
