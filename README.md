@@ -1,6 +1,24 @@
-# Jevalyn
+<div align="center">
 
-**The decision layer for your Rails app.** Built on [Jev](https://docs.typesafe.ai).
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/Ray-Hughes/jevalyn/main/docs/assets/logo-dark.png">
+  <img src="https://raw.githubusercontent.com/Ray-Hughes/jevalyn/main/docs/assets/logo.png" alt="Jevalyn" width="340">
+</picture>
+
+**Fast, cheap, structured decisions baked into your Rails app's control flow.**
+
+[![Version](https://img.shields.io/github/v/tag/Ray-Hughes/jevalyn?label=version&color=2DB88A)](https://github.com/Ray-Hughes/jevalyn/releases)
+[![CI](https://github.com/Ray-Hughes/jevalyn/actions/workflows/ci.yml/badge.svg)](https://github.com/Ray-Hughes/jevalyn/actions/workflows/ci.yml)
+[![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.1-CC342D)](https://www.ruby-lang.org)
+[![Rails](https://img.shields.io/badge/rails-%3E%3D%207.0-D30001)](https://rubyonrails.org)
+[![Jev](https://img.shields.io/badge/jev-1.13-21283C)](https://docs.typesafe.ai)
+[![License](https://img.shields.io/badge/license-MIT-black)](LICENSE.txt)
+
+[Install](#install) · [Decisions](#decisions) · [Guardrails](#guardrails) · [Router](#router) · [Testing](#testing)
+
+</div>
+
+---
 
 ```ruby
 class SupportTriage < Jevalyn::Decision
@@ -21,9 +39,10 @@ result.department   # => :technical
 result.certain?     # => true
 ```
 
-That is a routing decision made by a model, inside a Rails request, in about as long
-as a database query. Not a prompt, not a parsed JSON blob, not a retry loop around
-something that might return prose this time.
+**Jevalyn is the decision layer for your Rails app**, built on
+[Jev](https://docs.typesafe.ai). That is a routing decision made by a model, inside a
+Rails request, in about as long as a database query. Not a prompt, not a parsed JSON
+blob, not a retry loop around something that might return prose this time.
 
 ## What this is, and what it is not
 
