@@ -7,14 +7,16 @@ module Jevalyn
     # What a client sends in the `usage` position when nothing came back.
     EMPTY_USAGE = { "input_tokens" => 0, "output_tokens" => 0 }.freeze
 
-    attr_reader :answers, :raw, :questions, :confidence_threshold
+    attr_reader :answers, :raw, :questions
 
-    # questions -- Hash of name => Question, in declaration order.
-    # raw       -- the parsed response body, untouched.
-    def initialize(questions:, raw:, confidence_threshold: nil)
+    # questions  -- Hash of name => Question, in declaration order.
+    # raw        -- the parsed response body, untouched.
+    # thresholds -- Hash of name => confidence floor, already resolved by the Decision.
+    #               A nil floor means that question was not asked to clear anything.
+    def initialize(questions:, raw:, thresholds: nil)
       @questions = questions
       @raw = raw || {}
-      @confidence_threshold = confidence_threshold
+      @thresholds = normalize_thresholds(thresholds)
       @answers = build_answers
     end
 
@@ -50,26 +52,51 @@ module Jevalyn
     end
     alias to_h values
 
-    # True when every answer clears the threshold. Nouls are judged on how far they
-    # sit from a coin flip, since Jev returns no confidence for them.
-    def certain?(threshold = confidence_threshold)
+    # The floor each question is judged against. Read it to see what a Decision
+    # actually resolved, which is worth logging alongside the answers.
+    attr_reader :thresholds
+
+    def threshold_for(name)
+      @thresholds[name.to_sym]
+    end
+
+    # True when every answer clears its own floor. Pass a number to judge them all
+    # against that one instead. Nouls are measured on how far they sit from a coin
+    # flip, since Jev returns no confidence for them.
+    def certain?(threshold = nil)
       uncertain_questions(threshold).empty?
     end
 
-    def uncertain?(threshold = confidence_threshold) = !certain?(threshold)
+    def uncertain?(threshold = nil) = !certain?(threshold)
 
-    # Names of the answers that fell below the threshold -- the ones worth routing to
-    # a human or a slower model.
-    def uncertain_questions(threshold = confidence_threshold)
-      return [] if threshold.nil?
+    # True when one named answer clears its floor.
+    def certain_for?(name, threshold = :__declared__)
+      threshold = threshold_for(name) if threshold == :__declared__
 
-      @answers.select { |_, answer| answer.uncertain?(threshold) }.keys
+      answer(name).certain?(threshold)
     end
 
-    # The least certain answer's certainty, which is what `certain?` effectively gates on.
+    # Names of the answers that fell below their floor -- the ones worth routing to
+    # a human or a slower model.
+    def uncertain_questions(threshold = nil)
+      @answers.reject do |name, answer|
+        answer.certain?(threshold || @thresholds[name])
+      end.keys
+    end
+
+    # The least certain answer's certainty, across every question.
     def min_certainty
-      certainties = @answers.values.filter_map(&:certainty)
-      certainties.min
+      @answers.values.filter_map(&:certainty).min
+    end
+
+    # How far each answer sits above (or below) its own floor. Negative means it
+    # missed. Useful for logging which decisions are running close to the line.
+    def certainty_margins
+      @answers.each_with_object({}) do |(name, answer), out|
+        floor = @thresholds[name]
+        certainty = answer.certainty
+        out[name] = floor.nil? || certainty.nil? ? nil : (certainty - floor).round(10)
+      end
     end
 
     def each(&) = @answers.each(&)
@@ -92,6 +119,9 @@ module Jevalyn
           define_method(:"#{name}_answer") { answer(name) }
           define_method(:"#{name}_certainty") { answer(name).certainty }
           define_method(:"#{name}_probabilities") { answer(name).probabilities }
+          define_method(:"#{name}_threshold") { threshold_for(name) }
+          define_method(:"#{name}_certain?") { |threshold = :__declared__| certain_for?(name, threshold) }
+          define_method(:"#{name}_uncertain?") { |threshold = :__declared__| !certain_for?(name, threshold) }
 
           case question.type
           when :noul
@@ -108,6 +138,20 @@ module Jevalyn
     end
 
     private
+
+    # Accepts a Hash of floors, a single number meaning "all of them", or nothing.
+    def normalize_thresholds(thresholds)
+      case thresholds
+      when nil     then questions.keys.to_h { |name| [name, nil] }.freeze
+      when Numeric then questions.keys.to_h { |name| [name, thresholds] }.freeze
+      when Hash
+        questions.keys.to_h { |name| [name, thresholds[name] || thresholds[name.to_s]] }.freeze
+      else
+        raise ConfigurationError,
+              "thresholds must be a Hash of question => floor, a single number, or nil; " \
+              "got #{thresholds.class}."
+      end
+    end
 
     def build_answers
       raw_answers = raw["answers"] || {}

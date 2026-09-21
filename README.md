@@ -7,7 +7,8 @@
 
 **Fast, cheap, structured decisions baked into your Rails app's control flow.**
 
-[![Version](https://img.shields.io/github/v/tag/Ray-Hughes/jevalyn?label=version&color=2DB88A)](https://github.com/Ray-Hughes/jevalyn/releases)
+[![Gem](https://img.shields.io/gem/v/jevalyn?color=2DB88A)](https://rubygems.org/gems/jevalyn)
+[![Downloads](https://img.shields.io/gem/dt/jevalyn?color=21283C)](https://rubygems.org/gems/jevalyn)
 [![CI](https://github.com/Ray-Hughes/jevalyn/actions/workflows/ci.yml/badge.svg)](https://github.com/Ray-Hughes/jevalyn/actions/workflows/ci.yml)
 [![Ruby](https://img.shields.io/badge/ruby-%3E%3D%203.1-CC342D)](https://www.ruby-lang.org)
 [![Rails](https://img.shields.io/badge/rails-%3E%3D%207.0-D30001)](https://rubyonrails.org)
@@ -178,20 +179,75 @@ Confidence is the second axis. The answer tells you *what*; confidence tells you
 ```ruby
 result = RefundDecision.evaluate(request)
 
-if result.uncertain?(0.9)
+if result.uncertain?
   HumanReview.enqueue(request)     # the model said "I'm not sure"
 elsif result.approve?
   Refund.issue(request)
 end
 ```
 
-A threshold is not one number for your whole app. Misrouting a support ticket is
-recoverable; auto-approving a refund is not. Set `confidence_threshold` per decision,
-and override at the call site when the stakes change:
+A threshold is not one number for your whole app — and usually not one number for a
+whole decision either. Misrouting a ticket is recoverable; sending it to a team that
+cannot help is worse; auto-approving a refund is worse again. So a floor belongs to
+the **question**, and `confidence_threshold` on the class is just the default for
+questions that do not name their own:
 
 ```ruby
-SupportTriage.evaluate(body, confidence_threshold: 0.95)
+class SupportTriage < Jevalyn::Decision
+  question :department, type: :choice,
+    instructions: "Which team should handle this?",
+    criteria: { ... },
+    confidence_threshold: 0.8      # routing to the wrong team wastes a day
+
+  question :severity, type: :score,
+    instructions: "How severe is this issue?",
+    criteria: ["trivial", "minor", "major", "critical"],
+    confidence_threshold: 0.6      # a roughly-right severity is still useful
+
+  confidence_threshold 0.75        # the default for anything above without one
+end
 ```
+
+Each answer is then judged against its own floor:
+
+```ruby
+result = SupportTriage.evaluate(ticket.body)
+
+result.certain?              # => false — every answer against its own floor
+result.uncertain_questions   # => [:department] — severity was fine at 0.65
+result.department_certain?   # => false
+result.severity_certain?     # => true
+
+result.thresholds            # => { urgent: 0.75, department: 0.8, severity: 0.6 }
+result.department_threshold  # => 0.8
+result.certainty_margins     # => { urgent: 0.15, department: -0.1, severity: 0.05 }
+```
+
+`certainty_margins` is how far each answer sits above its floor — negative means it
+missed. Log it for a week and you will know which floors you actually set correctly.
+
+Override at the call site when the stakes change for one call. `confidence_threshold:`
+applies one number to everything; `thresholds:` names questions individually and wins
+where both are given:
+
+```ruby
+SupportTriage.evaluate(body, confidence_threshold: 0.95)     # stricter about all of it
+SupportTriage.evaluate(body, thresholds: { department: 0.9 }) # stricter about one
+```
+
+So the floor for a question resolves, most specific first:
+
+1. `thresholds:` at the call site
+2. `confidence_threshold:` at the call site
+3. `confidence_threshold:` on the question
+4. `confidence_threshold` on the decision
+5. `Jevalyn.config.default_confidence_threshold`
+
+With none of them set, `certain?` is `true` — nothing was asked for.
+
+A noul carries no confidence, so its floor is measured against `certainty`: how far
+the probability sits from a coin flip. `0.6` against a floor of `0.75` is uncertain;
+`0.92` clears it.
 
 ### State
 
@@ -335,6 +391,27 @@ stub_jevalyn(SupportTriage, confidence: 0.4, ...)              # exercise the un
 stub_jevalyn(SupportTriage) { |state| { urgent: state.include?("!") } }   # per-state
 forbid_jevalyn(SupportTriage)                                  # assert it is never called
 ```
+
+`confidence:` also takes a Hash, which is how you test [per-question
+floors](#confidence) — one answer landing under its floor while another clears its own:
+
+```ruby
+it "escalates a low-confidence department but keeps the severity" do
+  stub_jevalyn(SupportTriage,
+    department: :technical, severity: "major",
+    confidence: { department: 0.7, severity: 0.65 })
+
+  result = SupportTriage.evaluate(ticket.body)
+
+  expect(result).to have_uncertain_questions(:department)
+  expect(result).to be_severity_certain
+end
+```
+
+`have_uncertain_questions` prints every answer's certainty next to its floor when it
+fails, which is what you need to see when a threshold is set wrong. The per-question
+predicates (`be_department_certain`, `be_severity_certain`) come from `Result` through
+RSpec's own predicate matchers — there is nothing to register.
 
 Minitest works the same way via `require "jevalyn/testing/minitest"`.
 

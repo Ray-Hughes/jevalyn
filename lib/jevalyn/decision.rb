@@ -26,8 +26,9 @@ module Jevalyn
   # score levels fails on boot rather than as a 422 on a Friday afternoon.
   class Decision
     class << self
-      # Declares one question. Keys map one-to-one onto the API's question object.
-      def question(name, type:, instructions:, criteria: nil)
+      # Declares one question. Keys map one-to-one onto the API's question object,
+      # except `confidence_threshold`, which is Jevalyn's and is never sent.
+      def question(name, type:, instructions:, criteria: nil, confidence_threshold: nil)
         name = name.to_sym
 
         if questions.key?(name)
@@ -36,24 +37,33 @@ module Jevalyn
         end
 
         own_questions[name] = Question.build(name, type: type, instructions: instructions, criteria: criteria)
+        unless confidence_threshold.nil?
+          own_thresholds[name] =
+            validate_threshold!(confidence_threshold,
+                                "confidence_threshold for :#{name}")
+        end
         reset_result_class!
         own_questions[name]
       end
 
       # Sugar for the three types. `noul :urgent, "Does this convey urgency?"`
-      def noul(name, instructions, criteria: nil)
-        question(name, type: :noul, instructions: instructions, criteria: criteria)
+      def noul(name, instructions, criteria: nil, confidence_threshold: nil)
+        question(name, type: :noul, instructions: instructions, criteria: criteria,
+                       confidence_threshold: confidence_threshold)
       end
 
-      def choice(name, instructions, criteria)
-        question(name, type: :choice, instructions: instructions, criteria: criteria)
+      def choice(name, instructions, criteria, confidence_threshold: nil)
+        question(name, type: :choice, instructions: instructions, criteria: criteria,
+                       confidence_threshold: confidence_threshold)
       end
 
-      def score(name, instructions, criteria)
-        question(name, type: :score, instructions: instructions, criteria: criteria)
+      def score(name, instructions, criteria, confidence_threshold: nil)
+        question(name, type: :score, instructions: instructions, criteria: criteria,
+                       confidence_threshold: confidence_threshold)
       end
 
-      # Reads or sets the confidence floor this decision is considered certain above.
+      # Reads or sets the default confidence floor for this decision's questions.
+      # A question that declares its own overrides this; see #confidence_threshold_for.
       # Called with no argument it reads; the inherited or global value is the fallback.
       def confidence_threshold(value = :__read__)
         if value == :__read__
@@ -63,12 +73,27 @@ module Jevalyn
           return Jevalyn.config.default_confidence_threshold
         end
 
-        unless value.nil? || (value.is_a?(Numeric) && value.between?(0, 1))
-          raise ConfigurationError,
-                "confidence_threshold must be nil or a number between 0 and 1, got #{value.inspect}."
-        end
+        @confidence_threshold = validate_threshold!(value, "confidence_threshold")
+      end
 
-        @confidence_threshold = value
+      # The floor one question is judged against: its own if it declared one, this
+      # decision's default otherwise, and the global default under that.
+      def confidence_threshold_for(name)
+        declared = thresholds_by_question[name.to_sym]
+        return declared unless declared.nil?
+
+        confidence_threshold
+      end
+
+      # Every question's resolved floor, which is what a Result is judged against.
+      def thresholds
+        questions.keys.to_h { |name| [name, confidence_threshold_for(name)] }
+      end
+
+      # Per-question floors declared on this class and its ancestors.
+      def thresholds_by_question
+        inherited = superclass.respond_to?(:thresholds_by_question) ? superclass.thresholds_by_question : {}
+        inherited.merge(own_thresholds)
       end
 
       # Pins this decision to a specific model. Worth doing once you have tuned
@@ -93,16 +118,22 @@ module Jevalyn
       def question_names = questions.keys
 
       # Evaluates the state and returns a Jevalyn::Result with a reader per question.
-      def evaluate(state, model: nil, confidence_threshold: :__default__, client: Jevalyn.client)
+      #
+      # Two ways to override the declared floors for one call. `confidence_threshold:`
+      # applies one number to every question; `thresholds:` names them individually and
+      # wins over the blanket value where both are given.
+      #
+      #   SupportTriage.evaluate(body, confidence_threshold: 0.95)
+      #   SupportTriage.evaluate(body, thresholds: { department: 0.9 })
+      def evaluate(state, model: nil, confidence_threshold: :__default__, thresholds: nil,
+                   client: Jevalyn.client)
         ensure_questions!
-
-        threshold = confidence_threshold == :__default__ ? self.confidence_threshold : confidence_threshold
 
         client.evaluate(
           state: state,
           questions: questions,
           model: model || self.model,
-          confidence_threshold: threshold,
+          thresholds: resolve_thresholds(confidence_threshold, thresholds),
           result_class: result_class,
           decision: self
         )
@@ -146,11 +177,49 @@ module Jevalyn
         @own_questions ||= {}
       end
 
+      def own_thresholds
+        @own_thresholds ||= {}
+      end
+
       private
 
       def inherited(subclass)
         super
         subclass.instance_variable_set(:@own_questions, {})
+        subclass.instance_variable_set(:@own_thresholds, {})
+      end
+
+      # Call-site overrides, least specific first: the declared floors, then a blanket
+      # value applied to every question, then per-question values on top of that.
+      def resolve_thresholds(blanket, per_question)
+        resolved =
+          if blanket == :__default__
+            thresholds
+          else
+            validate_threshold!(blanket, "confidence_threshold")
+            questions.keys.to_h { |name| [name, blanket] }
+          end
+
+        return resolved if per_question.nil?
+
+        per_question.each_with_object(resolved.dup) do |(name, value), out|
+          name = name.to_sym
+
+          unless questions.key?(name)
+            raise ConfigurationError,
+                  "#{self.name || "This Decision"} declares no question named #{name.inspect}. " \
+                  "It has: #{question_names.map(&:inspect).join(", ")}."
+          end
+
+          out[name] = validate_threshold!(value, name.inspect)
+        end
+      end
+
+      def validate_threshold!(value, label)
+        return value if value.nil? || (value.is_a?(Numeric) && value.between?(0, 1))
+
+        raise ConfigurationError,
+              "#{label} must be nil or a number between 0 and 1, got #{value.inspect}."
       end
 
       def ensure_questions!

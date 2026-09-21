@@ -76,6 +76,30 @@ RSpec.describe Jevalyn::Router do
       expect(plain.call("x")).to eq("billing: x")
     end
 
+    # The floor belongs to the question, so a router should not have to restate it.
+    it "falls back to the question's own floor when the router names no threshold" do
+      strict = Class.new(SupportTriage) do
+        def self.name = "StrictTriage"
+
+        confidence_threshold 0.9
+      end
+
+      routed = described_class.new(strict, on: :department) do |r|
+        r.route :billing,   to: ->(_s) { :billing }
+        r.route :technical, to: ->(_s) { :technical }
+        r.route :sales,     to: ->(_s) { :sales }
+        r.uncertain_below to: ->(_s) { :human }
+      end
+
+      Jevalyn::Testing.stub(strict, confidence: 0.85, urgent: true,
+                                    department: :technical, severity: "major")
+      expect(routed.call("x")).to eq(:human)
+
+      Jevalyn::Testing.stub(strict, confidence: 0.95, urgent: true,
+                                    department: :technical, severity: "major")
+      expect(routed.call("x")).to eq(:technical)
+    end
+
     it "exposes the decision without dispatching" do
       triage_stub(department: :sales)
 

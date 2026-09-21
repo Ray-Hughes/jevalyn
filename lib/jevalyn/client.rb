@@ -26,8 +26,11 @@ module Jevalyn
     #              #as_json is serialised first; see Jevalyn::State.
     # questions -- Hash of name => Jevalyn::Question, or name => Hash payload.
     #
+    # thresholds is Jevalyn's own, never sent: a Hash of question => confidence floor,
+    # or a single number for all of them.
+    #
     # Returns a Jevalyn::Result.
-    def evaluate(state:, questions:, model: nil, confidence_threshold: nil,
+    def evaluate(state:, questions:, model: nil, confidence_threshold: nil, thresholds: nil,
                  result_class: Result, decision: nil)
       questions = normalize_questions(questions)
       body = {
@@ -42,7 +45,7 @@ module Jevalyn
               Testing.through_cassette(body) { post(config.evaluation_url, body) }
             end
 
-      result_class.new(questions: questions, raw: raw, confidence_threshold: confidence_threshold)
+      result_class.new(questions: questions, raw: raw, thresholds: thresholds || confidence_threshold)
     end
 
     # GET /v1/models -- the names this account may send in the `model` field.

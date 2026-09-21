@@ -41,6 +41,13 @@ module Jevalyn
       #   Jevalyn::Testing.stub(SupportTriage, confidence: 0.6, department: :billing)
       #   Jevalyn::Testing.stub(SupportTriage) { |state| { department: route_for(state) } }
       #
+      # `confidence:` also takes a Hash, which is how you exercise per-question floors:
+      # one answer landing under its floor while another clears its own.
+      #
+      #   Jevalyn::Testing.stub(SupportTriage,
+      #     department: :technical, severity: "major",
+      #     confidence: { department: 0.7, severity: 0.65 })
+      #
       # A block is re-run per call and receives the serialised state, so one stub can
       # answer differently for different inputs.
       def stub(decision, confidence: DEFAULT_CONFIDENCE, **values, &block)
@@ -109,7 +116,7 @@ module Jevalyn
         answers = questions.each_with_object({}) do |(name, question), out|
           raise NoStubError, missing_message(decision, name, questions) unless values.key?(name)
 
-          out[name.to_s] = answer_for(question, values[name], confidence)
+          out[name.to_s] = answer_for(question, values[name], confidence_for(confidence, name))
         end
 
         {
@@ -129,6 +136,14 @@ module Jevalyn
       end
 
       private
+
+      # `confidence:` is either one number for every answer, or a Hash naming them
+      # individually so a spec can put one answer under its floor and another over.
+      def confidence_for(confidence, name)
+        return confidence unless confidence.is_a?(Hash)
+
+        confidence[name] || confidence[name.to_s] || DEFAULT_CONFIDENCE
+      end
 
       def noul_answer(value)
         probability =

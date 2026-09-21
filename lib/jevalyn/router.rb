@@ -19,7 +19,7 @@ module Jevalyn
   #     r.route :billing,   to: BillingInbox
   #     r.route :technical, to: ->(state, result) { Oncall.page(state, result) }
   #     r.route :sales,     to: SalesInbox
-  #     r.uncertain_below 0.75, to: HumanQueue
+  #     r.uncertain_below to: HumanQueue
   #   end
   #
   #   router.call(ticket)
@@ -60,10 +60,17 @@ module Jevalyn
       self
     end
 
-    # Where an answer below `threshold` goes, whatever the answer was. This is the
-    # confidence-gated half: a wrong-but-confident answer is a routing bug, a
-    # not-confident answer is a known unknown and belongs with a human or a slower model.
-    def uncertain_below(threshold, to:)
+    # Where an answer that misses its confidence floor goes, whatever the answer was.
+    # This is the confidence-gated half: a wrong-but-confident answer is a routing bug,
+    # a not-confident answer is a known unknown and belongs with a human or a slower
+    # model.
+    #
+    # With no threshold it uses the floor the question itself declares, so the number
+    # lives in one place:
+    #
+    #   r.uncertain_below to: HumanQueue          # the decision's own floor
+    #   r.uncertain_below 0.9, to: HumanQueue     # stricter, just for this router
+    def uncertain_below(threshold = nil, to:)
       @floor = threshold
       @floor_handler = to
       self
@@ -94,7 +101,8 @@ module Jevalyn
       result = decision.evaluate(state, **options)
       answer = result.answer(question_name)
 
-      return invoke(@floor_handler, state, result) if @floor_handler && answer.uncertain?(@floor)
+      floor = @floor || result.threshold_for(question_name)
+      return invoke(@floor_handler, state, result) if @floor_handler && answer.uncertain?(floor)
 
       dispatch(answer.value, state: state, result: result)
     end

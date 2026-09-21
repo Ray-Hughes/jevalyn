@@ -25,7 +25,10 @@ class <%= class_name %> < Jevalyn::Decision
     criteria: {
       first_option: "TODO: when this option applies",
       second_option: "TODO: when this one does instead"
-    }
+    },
+    # Optional. Without it this question uses the decision's floor below. Set it when
+    # this answer costs more to get wrong than the others.
+    confidence_threshold: <%= threshold %>
 
 <% when :score -%>
   # A score rates the state against ordered levels, lowest first, and returns a
@@ -37,12 +40,14 @@ class <%= class_name %> < Jevalyn::Decision
       "TODO: lowest level",
       "TODO: middle level",
       "TODO: highest level"
-    ]
+    ],
+    confidence_threshold: <%= threshold %>
 
 <% end -%>
 <% end -%>
-  # Answers below this are reported by `result.uncertain?` and named by
-  # `result.uncertain_questions`. Set it by what a wrong answer costs: a misrouted
+  # The default floor for any question above that did not declare its own. Answers
+  # below their floor are reported by `result.uncertain?` and named by
+  # `result.uncertain_questions`. Set these by what a wrong answer costs: a misrouted
   # ticket is cheap, an auto-approved refund is not.
   confidence_threshold <%= threshold %>
 end

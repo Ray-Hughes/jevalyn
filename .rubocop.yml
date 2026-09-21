@@ -40,6 +40,7 @@ Metrics/AbcSize:
   Max: 22
   Exclude:
     - "lib/jevalyn/client.rb"
+    - "lib/jevalyn/decision.rb"
     - "lib/jevalyn/question.rb"
     - "lib/jevalyn/result.rb"
     - "lib/jevalyn/router.rb"
@@ -75,7 +76,7 @@ Metrics/BlockLength:
     - "lib/jevalyn/tasks/jevalyn.rake"
 
 RSpec/ExampleLength:
-  Max: 15
+  Max: 18
 
 RSpec/MultipleExpectations:
   Max: 5

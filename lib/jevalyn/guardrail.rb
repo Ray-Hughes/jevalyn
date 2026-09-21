@@ -104,7 +104,7 @@ module Jevalyn
         question_key = question_names.first.to_s
         raw = { "answers" => { question_key => { "type" => "noul", "noul" => 0.0 } } }
 
-        result = result_class.new(questions: questions, raw: raw)
+        result = result_class.new(questions: questions, raw: raw, thresholds: thresholds)
         result.instance_variable_set(:@error, error)
         result
       end

@@ -11,6 +11,14 @@ require "jevalyn/testing"
 #   stub_jevalyn(SupportTriage, department: :technical, urgent: true)
 #   expect(SupportTriage).to have_been_evaluated
 #   expect(result).to be_certain_above(0.8)
+#   expect(result).to have_uncertain_questions(:department)
+#
+# Result's own predicates come through RSpec for free, including the per-question
+# ones a Decision generates:
+#
+#   expect(result).to be_certain
+#   expect(result).to be_department_certain
+#   expect(result).not_to be_severity_certain
 #
 # Tag an example `:jevalyn_live` to let it reach the real API.
 module Jevalyn
@@ -74,6 +82,23 @@ if defined?(RSpec)
       "expected every answer to clear #{threshold}, but " \
         "#{result.uncertain_questions(threshold).map(&:inspect).join(", ")} did not " \
         "(lowest certainty #{result.min_certainty.inspect})"
+    end
+  end
+
+  # Asserts exactly which answers missed their own floors. The failure prints the
+  # floor and the certainty side by side, which is the thing you actually need to see
+  # when a per-question threshold is set wrong.
+  RSpec::Matchers.define :have_uncertain_questions do |*expected|
+    match { |result| result.uncertain_questions.sort == expected.flatten.map(&:to_sym).sort }
+
+    failure_message do |result|
+      rows = result.thresholds.map do |name, floor|
+        certainty = result.answer(name).certainty
+        "  #{name}: certainty=#{certainty.inspect} floor=#{floor.inspect}"
+      end
+
+      "expected #{expected.flatten.map(&:to_sym).inspect} to be the uncertain answers, " \
+        "got #{result.uncertain_questions.inspect}\n#{rows.join("\n")}"
     end
   end
 
